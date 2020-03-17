@@ -4,13 +4,20 @@
  Author:	Lukas Granzer
 */
 
-// the setup function runs once when you press reset or power the board
+
+#include "GroundwaterMonitor.h"
+
+GroundWaterMonitor gwm;
+uint16_t x;
+
 void setup() {
-	Serial.begin(9600);
-	Serial.write("Epstein didnt kill himself.");
+	gwm.initialize("zahrada","tajneheslo");
+
 }
 
-// the loop function runs over and over again until power down or reset
+
 void loop() {
-	;;
+	gwm.countup();
+	gwm.webserver_handler();
+	delay(100);
 }
