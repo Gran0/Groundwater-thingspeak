@@ -8,16 +8,23 @@
 #include "GroundwaterMonitor.h"
 
 GroundWaterMonitor gwm;
-uint16_t x;
 
 void setup() {
-	gwm.initialize("zahrada","tajneheslo");
+	bool deviceOnline;
+	float data;
+
+	deviceOnline = gwm.initialize("zahrada", "nasepeggy78");
+	
+	if (deviceOnline) {
+		data = gwm.measure();
+		gwm.sendDataToCloud(data);
+	}
 
 }
 
 
 void loop() {
 	gwm.countup();
-	gwm.webserver_handler();
+	gwm.webserverHandler();
 	delay(100);
 }
