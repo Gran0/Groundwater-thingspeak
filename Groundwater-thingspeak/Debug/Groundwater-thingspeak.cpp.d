@@ -268,4 +268,5 @@ C:\Users\Lukas\ Granzer\AppData\Local\Temp\VMBuilds\Groundwater-thingspeak\esp32
  C:\Users\Lukas\ Granzer\AppData\Local\arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WebServer\src/WebServer.h \
  C:\Users\Lukas\ Granzer\AppData\Local\arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WebServer\src/HTTP_Method.h \
  C:\Users\Lukas\ Granzer\AppData\Local\arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WebServer\src/detail/RequestHandler.h \
- C:\Users\Lukas\ Granzer\AppData\Local\arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WebServer\src/HTTP_Method.h
+ C:\Users\Lukas\ Granzer\AppData\Local\arduino15\packages\esp32\hardware\esp32\1.0.4\libraries\WebServer\src/HTTP_Method.h \
+ C:\Users\Lukas\ Granzer\AppData\Local\Temp\VMBuilds\Groundwater-thingspeak\esp32_esp32\Debug\MemoryAdd.h

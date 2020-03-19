@@ -8,28 +8,29 @@ GroundWaterMonitor::GroundWaterMonitor() {
 GroundWaterMonitor::~GroundWaterMonitor() {}
 
 /*
-	Params:
-		wifiName - WiFi name in local network
-		wifiPass - Password to local network
 	Return value:
 		Result of connecting to local WiFi network
 */
-bool GroundWaterMonitor::initialize(const char wifiName[],const char wifiPass[]) {
+bool GroundWaterMonitor::initialize() {
 	bool internetAvailable = false;
+
+	// EEPROM connect
+	memory.begin(200);
+	loadEEPROMconfig();
+
 	// Serial line for debugging
 	s->begin(9600);
 	s->println("\n\n\n> Ground water monitor <");
 
 	
 	// Wifi configuration
-	s->print("\nConnecting WiFi(");
-	s->print(wifiName);
+	s->print("\nConnecting to WiFi(");
+	s->print(this->wifiName);
 	s->println(")");
 	s->print("Status .");
 
-	wifi.setHostname("Groundwater monitor");	// Name for this access point in Server mode
 	wifi.mode(WIFI_MODE_STA);					// Work as end-device
-	wifi.begin(wifiName, wifiPass);
+	wifi.begin(this->wifiName, this->wifiPasswd);
 	for (uint8_t i = 0; i < 30; i++)
 	{	
 		if (wifi.status() == WL_CONNECTED) {	// Bingo
@@ -38,7 +39,7 @@ bool GroundWaterMonitor::initialize(const char wifiName[],const char wifiPass[])
 		}
 
 		if (i == 10) {	// Last chance ...
-			wifi.begin(wifiName, wifiPass);
+			wifi.begin(this->wifiName, this->wifiPasswd);
 		}
 		
 		if (i == 29) {	// See you later :(
@@ -54,27 +55,12 @@ bool GroundWaterMonitor::initialize(const char wifiName[],const char wifiPass[])
 	if (internetAvailable) {
 		s->println(" Connected");
 		s->print("AP: ");
-		s->println(wifiName);
+		s->print(this->wifiName);
+		s->print(" ");
+		s->print(wifi.RSSI());
+		s->println("dBm");
 		s->print("IP adress: ");
-		s->println(wifi.localIP());
-
-		
-	}
-	// Connection failed to local WiFi network.
-	else {
-
-		// Webserver for device configuration
-		this->server.on("/", [&]() {
-			page_index();
-		});
-		this->server.onNotFound([&]() {
-			page_notFound();
-		});
-		this->server.begin(80);
-
-		// DNS for request handling
-		this->dns = MDNSResponder();
-		dns.begin("configuration");
+		s->println(wifi.localIP());	
 	}
 
 	return internetAvailable;
@@ -82,8 +68,8 @@ bool GroundWaterMonitor::initialize(const char wifiName[],const char wifiPass[])
 
 void GroundWaterMonitor::webserverHandler() {
 	server.handleClient();
+	
 }
-
 void GroundWaterMonitor::sendDataToCloud(float value) {
 	String postStr = this->apiKey;
 	
@@ -126,6 +112,74 @@ float GroundWaterMonitor::measure() {
 	return 123.45f;
 }
 
+void GroundWaterMonitor::enableWebserver() {
+	wifi.disconnect();
+
+	wifi.mode(WIFI_MODE_AP);	// Work as router
+	IPAddress ip(192, 168, 100, 101), mask(255, 255, 255, 0), gateway(192, 168, 100, 100);
+	wifi.softAPConfig(ip, gateway, mask);
+	wifi.setHostname("Groundwater monitor");	// Name for this access point
+	wifi.softAP(this->wifiAPname, this->wifiAPpasswd, this->wifiAPchannel,150,2);
+
+	s->println("\n\nStarting access point ...");
+	s->print("AP name: ");
+	s->println(this->wifiAPname);
+	s->print("Password: ");
+	s->println(this->wifiAPpasswd);
+	s->println("More on configuration page: http://configuration/ \n\n");
+
+	// Webserver for device configuration
+	this->server.on("/", [&]() {
+		page_index();
+	});
+	this->server.onNotFound([&]() {
+		page_notFound();
+	});
+	this->server.begin(80);	// port 80
+
+	// DNS for request handling
+	this->dns = MDNSResponder();
+	dns.begin("configuration");
+}
+void GroundWaterMonitor::loadEEPROMconfig() {
+	int isInit = memory.readByte(Address.INICIALIZED);
+	String buff;
+
+	// Check if eeprom is initialized
+	if (isInit != 123) {
+		resetEEPROMdata();
+	}
+	// Copy data EEPROM => RAM
+	this->apiKey = memory.readString(Address.ApiKey);
+	
+	buff = memory.readString(Address.APname);
+	buff.toCharArray(this->wifiAPname, 30, 0);
+
+	buff = memory.readString(Address.APpasswd);
+	buff.toCharArray(this->wifiAPpasswd, 40, 0);
+	
+	this->wifiAPchannel = memory.readULong(Address.APchannel);
+
+	buff = memory.readString(Address.WiFiName);
+	buff.toCharArray(this->wifiName, 40, 0);
+
+	buff = memory.readString(Address.WiFipasswd);
+	buff.toCharArray(this->wifiPasswd, 40, 0);
+
+}
+void GroundWaterMonitor::resetEEPROMdata() {
+	memory.writeBytes(Address.WiFiName, "Default name\0",13);
+	memory.writeBytes(Address.WiFipasswd, "not set\0", 8);
+	
+	memory.writeBytes(Address.APname, "Groundwater monitor\0", 20);
+	memory.writeBytes(Address.APpasswd, "password\0", 9);
+	memory.writeULong(Address.APchannel, 5);
+
+	memory.writeBytes(Address.ApiKey, "xxxXXXxxx\0", 10);
+
+	memory.writeByte(Address.INICIALIZED, 123);
+	memory.commit();
+}
 void GroundWaterMonitor::page_index() {
 	char html[30];
 	sprintf(html, "This is the main page - %d", this->counter);
@@ -141,10 +195,3 @@ void GroundWaterMonitor::page_notFound() {
 }
 
 ///////////////////////////////////////////////
-void GroundWaterMonitor::countup() {
-	this->counter++;
-}
-uint16_t GroundWaterMonitor::get() {
-	s->printf("%d", counter);
-	return this->counter;
-}

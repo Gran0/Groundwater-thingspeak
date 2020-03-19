@@ -117,17 +117,19 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GroundWaterMonitor.h" />
+    <ClInclude Include="MemoryAdd.h" />
     <ClInclude Include="__vm\.Groundwater-thingspeak.vsarduino.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="GroundWaterMonitor.cpp" />
+    <ClCompile Include="MemoryAdd.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
   <ProjectExtensions>
     <VisualStudio>
-      <UserProperties debug.view.FreeMemory="" config.Debug.customdebug_mega_atmega2560_debugger_type="universal" config.Debug.customdebug_esp32_esp32_debugger_type="none" />
+      <UserProperties debug.view.FreeMemory="" config.Debug.customdebug_mega_atmega2560_debugger_type="universal" config.Debug.customdebug_esp32_esp32_debugger_type="none" arduino.upload.port="COM6 " />
     </VisualStudio>
   </ProjectExtensions>
 </Project>
