@@ -8,11 +8,12 @@ public:
 
 	static const int APname     = 80;  // 30b
 	static const int APpasswd   = 110; // 40b
-	static const int APchannel  = 150; // 4b
+	static const int APchannel  = 150; // 1b
+	static const int SensorHeight = 151; // 2b
 
 	static const int INICIALIZED = 155; // 1b
 	static const int ApiKey      = 156; // 20b
-
+	
 	
 
 

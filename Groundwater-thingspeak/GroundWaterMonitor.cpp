@@ -1,5 +1,6 @@
 #include "GroundWaterMonitor.h"
 #include "WString.h"
+#include "string.h"
 
 GroundWaterMonitor::GroundWaterMonitor() {
 	this->s = &Serial;
@@ -13,6 +14,8 @@ GroundWaterMonitor::~GroundWaterMonitor() {}
 */
 bool GroundWaterMonitor::initialize() {
 	bool internetAvailable = false;
+
+	// Pin inicialization
 
 	// EEPROM connect
 	memory.begin(200);
@@ -132,6 +135,9 @@ void GroundWaterMonitor::enableWebserver() {
 	this->server.on("/", [&]() {
 		page_index();
 	});
+	this->server.on("/manual_measure", [&]() {
+		runManualMeasure();
+	});
 	this->server.onNotFound([&]() {
 		page_notFound();
 	});
@@ -158,7 +164,8 @@ void GroundWaterMonitor::loadEEPROMconfig() {
 	buff = memory.readString(Address.APpasswd);
 	buff.toCharArray(this->wifiAPpasswd, 40, 0);
 	
-	this->wifiAPchannel = memory.readULong(Address.APchannel);
+	this->wifiAPchannel = memory.readUChar(Address.APchannel);
+	this->sensorHeight = memory.readShort(Address.SensorHeight);
 
 	buff = memory.readString(Address.WiFiName);
 	buff.toCharArray(this->wifiName, 40, 0);
@@ -173,25 +180,132 @@ void GroundWaterMonitor::resetEEPROMdata() {
 	
 	memory.writeBytes(Address.APname, "Groundwater monitor\0", 20);
 	memory.writeBytes(Address.APpasswd, "password\0", 9);
-	memory.writeULong(Address.APchannel, 5);
+	memory.writeUChar(Address.APchannel, 5);
 
 	memory.writeBytes(Address.ApiKey, "xxxXXXxxx\0", 10);
+	memory.writeShort(Address.SensorHeight, 10);
 
 	memory.writeByte(Address.INICIALIZED, 123);
 	memory.commit();
 }
-void GroundWaterMonitor::page_index() {
-	char html[30];
-	sprintf(html, "This is the main page - %d", this->counter);
+void GroundWaterMonitor::storeEEPROMconfig() {
+	memory.writeBytes(Address.WiFiName, this->wifiName, 40);
+	memory.writeBytes(Address.WiFipasswd, this->wifiPasswd,40);
 
-	sprintf(this->HTML_buffer, "%s%s%s", this->htmlPrefix, html, this->htmlPostfix);
+	memory.writeBytes(Address.APname, this->wifiAPname,30);
+	memory.writeBytes(Address.APpasswd, this->wifiAPpasswd, 40);
+	memory.writeUChar(Address.APchannel, this->wifiAPchannel);
+
+	memory.writeString(Address.ApiKey, this->apiKey);
+	memory.writeShort(Address.SensorHeight, this->sensorHeight);
+	memory.writeByte(Address.INICIALIZED, 123);
+	memory.commit();
+}
+void GroundWaterMonitor::page_index() {
+
+	// Data from HTML form
+	if (server.hasArg("lan_ssid")) {
+		 strcpy(this->wifiName, server.arg("lan_ssid").c_str());
+	}
+	if (server.hasArg("lan_passwd")) {
+		strcpy(this->wifiPasswd, server.arg("lan_passwd").c_str());
+	}
+	if (server.hasArg("hotspot_ssid")) {
+		strcpy(this->wifiAPname, server.arg("hotspot_ssid").c_str());
+	}
+	if (server.hasArg("hotspot_passwd")) {
+		strcpy(this->wifiAPpasswd, server.arg("hotspot_passwd").c_str());
+	}
+	if (server.hasArg("hotspot_channel")) {
+		long int ch = server.arg("hotspot_channel").toInt();
+		if (ch > 0 && ch < 12)
+			this->wifiAPchannel = (uint8_t)ch;
+	}
+	if (server.hasArg("api_key")) {
+		this->apiKey = server.arg("api_key");
+	}
+	if (server.hasArg("height")) {
+		long int h = server.arg("height").toInt();
+		this->sensorHeight = (uint16_t) h;
+	}
+	if(server.args() != 0)
+		storeEEPROMconfig();
+
+	// Formating HTML page with data
+	String html = completeHTMLValue(this->htmlIndex, "lan_ssid",this->wifiName);
+	html = completeHTMLValue(html,"lan_passwd",this->wifiPasswd);
+	html = completeHTMLValue(html, "hotspot_ssid", this->wifiAPname);
+	html = completeHTMLValue(html, "hotspot_passwd", this->wifiAPpasswd);
+	
+	html = completeHTMLValue(html, "hotspot_channel",(int) this->wifiAPchannel);
+	html = completeHTMLValue(html, "api_key", this->apiKey);
+	html = completeHTMLValue(html, "height", this->sensorHeight);
+
+	sprintf(this->HTML_buffer, "%s%s%s", this->htmlPrefix, html.c_str(), this->htmlPostfix);
 	server.send(200, "text/html", this->HTML_buffer);
 }
 void GroundWaterMonitor::page_notFound() {
-	char html[] = "Sorry - page not found!";
+	char html[] = "<h4>404 ERROR - page not found!</h4>";
 
-	sprintf(this->HTML_buffer, "%s%s%s", this->htmlPrefix, html,this->htmlPostfix);
+	sprintf(this->HTML_buffer, "%s%s%s", this->htmlPrefix, html, this->htmlPostfix);
 	server.send(404, "text/html", this->HTML_buffer);
+}
+void GroundWaterMonitor::runManualMeasure() {
+	float value = measure();
+	// 
+	page_index();
+}
+// Functions find in HTML form <input> element with selected "name" and complete value attribute
+String GroundWaterMonitor::completeHTMLValue(const char* html, String input_name, char* value) {
+	String s = html;
+	unsigned int position = s.indexOf(input_name, 0);	// Find input in html code
+	position = s.indexOf("value=", position);		// Find value parameter
+
+	String replace = value;
+	String x = s.substring(position, position+10);		// Complete value
+	x.replace("''", "'" + replace + "'");
+
+	s = s.substring(0, position) + x + s.substring(position + 8);
+
+	return s;
+}
+String GroundWaterMonitor::completeHTMLValue(String html, String input_name, char* value) {
+	String s = html;
+	uint16_t position = s.indexOf(input_name, 0);	// Find input in html code
+	position = s.indexOf("value=", position);		// Find value parameter
+
+	String replace = value;
+	String x = s.substring(position, position + 10);		// Complete value
+	x.replace("''", "'" + replace + "'");
+
+	s = s.substring(0, position) + x + s.substring(position + 8);
+
+	return s;
+}
+String GroundWaterMonitor::completeHTMLValue(String html, String input_name, String value) {
+	String s = html;
+	uint16_t position = s.indexOf(input_name, 0);	// Find input in html code
+	position = s.indexOf("value=", position);		// Find value parameter
+
+	String x = s.substring(position, position + 10);		// Complete value
+	x.replace("''", "'" + value + "'");
+
+	s = s.substring(0, position) + x + s.substring(position + 8);
+
+	return s;
+}
+String GroundWaterMonitor::completeHTMLValue(String html, String input_name, int value) {
+	String s = html;
+	uint16_t position = s.indexOf(input_name, 0);	// Find input in html code
+	position = s.indexOf("value=", position);		// Find value parameter
+
+	String s_val = String(value);
+	String x = s.substring(position, position + 10);		// Complete value
+	x.replace("''", "'" + s_val + "'");
+
+	s = s.substring(0, position) + x + s.substring(position + 8);
+
+	return s;
 }
 
 ///////////////////////////////////////////////

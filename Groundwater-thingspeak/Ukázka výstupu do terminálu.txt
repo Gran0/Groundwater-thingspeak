@@ -1,0 +1,12 @@
+> Ground water monitor <
+
+Connecting to WiFi(Hafik)
+Status ................... Connected
+AP: Hafik -79dBm
+IP adress: 192.168.10.105
+
+
+Starting access point ...
+AP name: Groundwater monitor I
+Password: tajneheslo
+More on configuration page: http://configuration/ 

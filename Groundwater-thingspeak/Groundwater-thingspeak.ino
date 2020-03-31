@@ -19,7 +19,7 @@ void setup() {
 	
 	if (deviceOnline) {
 		data = gwm.measure();
-		gwm.sendDataToCloud(data);
+		//gwm.sendDataToCloud(data);
 		/*
 			Device is powered only 15 second, during normal work. In this case is not
 			neccessary to turn on webserver (and mess WiFi band) - device only send data to cloud.
