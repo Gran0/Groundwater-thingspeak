@@ -13,10 +13,8 @@ public:
 
 	static const int INICIALIZED = 155; // 1b
 	static const int ApiKey      = 156; // 20b
-	
-	
-
-
+	static const int PeriodicalMode = 177; // 1b
+	static const int Period		 = 178;  // 2b
 private:
 };
 

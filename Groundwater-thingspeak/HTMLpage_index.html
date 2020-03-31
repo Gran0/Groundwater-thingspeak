@@ -78,6 +78,12 @@
             display: inline-block;
             margin-left: 40px;
         }
+        #setting label{
+            width: 200px;
+        }
+        #setting button{
+            margin-left:60px;
+        }
 
         button {
             background-color: #FFE805;
@@ -115,7 +121,7 @@
                 <p>Last measured value: <span id="number">485 cm</span> <a href="/manual_measure"><button>Start measuring</button></a></p>
             </article>
         </div>
-        <form action="/" method="post">
+        <form action="/" method="get">
             <div>
                 <h2>Network</h2>
                 <article>
@@ -133,11 +139,21 @@
                 </article>
             </div>
             <div>
-                <h2>Sensor location</h2>
-                <article>
+                <h2>Sensor settings</h2>
+                <article id="setting">
                     <label>Sensor height <br />from well bottom:</label><input type="number" min="10" max="1000" name="height" value="" />cm
+                    <hr />
+                    <label>Measuring mode</label>
+                    <input type="radio" value="off" name="periodical" />On start
+                    <input type="radio" value="on" name="periodical" />Periodical<br />
+
+                    <label>Period </label><input type="time" name="period" value="" />hh:mm
                     <button type="submit">Save settings</button><br />
-                    <label></label>
+                    <p>
+                        Device sends data only once in <strong>On start</strong> mode.
+                        This mode is suitable for intermittent power supply applications.
+                        <strong>Periodical mode</strong> measures and sends data in set interval.
+                    </p>
                 </article>
             </div>
         </form>

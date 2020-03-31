@@ -66,12 +66,12 @@ bool GroundWaterMonitor::initialize() {
 		s->println(wifi.localIP());	
 	}
 
+
 	return internetAvailable;
 }
 
 void GroundWaterMonitor::webserverHandler() {
 	server.handleClient();
-	
 }
 void GroundWaterMonitor::sendDataToCloud(float value) {
 	String postStr = this->apiKey;
@@ -112,6 +112,9 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 	this->client.stop();	
 }
 float GroundWaterMonitor::measure() {
+	/* Do measurement and calculate result 
+	*/
+	this->waterLevel = 123.4f;
 	return 123.45f;
 }
 
@@ -173,6 +176,9 @@ void GroundWaterMonitor::loadEEPROMconfig() {
 	buff = memory.readString(Address.WiFipasswd);
 	buff.toCharArray(this->wifiPasswd, 40, 0);
 
+	this->periodicalMode = memory.readBool(Address.PeriodicalMode);
+	this->period = memory.readUShort(Address.Period);
+
 }
 void GroundWaterMonitor::resetEEPROMdata() {
 	memory.writeBytes(Address.WiFiName, "Default name\0",13);
@@ -184,6 +190,8 @@ void GroundWaterMonitor::resetEEPROMdata() {
 
 	memory.writeBytes(Address.ApiKey, "xxxXXXxxx\0", 10);
 	memory.writeShort(Address.SensorHeight, 10);
+	memory.writeBool(Address.PeriodicalMode, false);
+	memory.writeUShort(Address.Period, 30);		// 30 min
 
 	memory.writeByte(Address.INICIALIZED, 123);
 	memory.commit();
@@ -198,6 +206,9 @@ void GroundWaterMonitor::storeEEPROMconfig() {
 
 	memory.writeString(Address.ApiKey, this->apiKey);
 	memory.writeShort(Address.SensorHeight, this->sensorHeight);
+	memory.writeUShort(Address.Period, this->period);
+	memory.writeBool(Address.PeriodicalMode, this->periodicalMode);
+
 	memory.writeByte(Address.INICIALIZED, 123);
 	memory.commit();
 }
@@ -228,6 +239,24 @@ void GroundWaterMonitor::page_index() {
 		long int h = server.arg("height").toInt();
 		this->sensorHeight = (uint16_t) h;
 	}
+	if (server.hasArg("periodical")) {
+		if (server.arg("periodical") == "on") {
+			this->periodicalMode = true;
+		}
+		else
+			this->periodicalMode = false;
+	}
+	if (server.hasArg("period")) {
+		String time = server.arg("period");
+		String hour = time.substring(0, time.indexOf(":"));
+		String min = time.substring(time.indexOf(":")+1, time.length());
+		if (hour.charAt(0) == '0')
+			hour = hour.substring(1, hour.length());
+		if (min.charAt(0) == '0')
+			min = min.substring(1, min.length());
+
+		this->period =(uint16_t)( hour.toInt()*60 + min.toInt());
+	}
 	if(server.args() != 0)
 		storeEEPROMconfig();
 
@@ -237,9 +266,18 @@ void GroundWaterMonitor::page_index() {
 	html = completeHTMLValue(html, "hotspot_ssid", this->wifiAPname);
 	html = completeHTMLValue(html, "hotspot_passwd", this->wifiAPpasswd);
 	
-	html = completeHTMLValue(html, "hotspot_channel",(int) this->wifiAPchannel);
+	html = completeHTMLValue(html, "hotspot_channel", this->wifiAPchannel);
 	html = completeHTMLValue(html, "api_key", this->apiKey);
 	html = completeHTMLValue(html, "height", this->sensorHeight);
+
+	int h = this->period / 60;
+	int m = this->period % 60;
+	String timestamp = h < 10 ? "0" + String(h) : String(h);
+	timestamp += ":";
+	timestamp += m < 10 ? "0" + String(m) : String(m);
+	
+	html = completeHTMLValue(html, "period", timestamp);
+	html = completeHTMLCheckbox(html, "periodical", this->periodicalMode?"on":"off");
 
 	sprintf(this->HTML_buffer, "%s%s%s", this->htmlPrefix, html.c_str(), this->htmlPostfix);
 	server.send(200, "text/html", this->HTML_buffer);
@@ -251,61 +289,69 @@ void GroundWaterMonitor::page_notFound() {
 	server.send(404, "text/html", this->HTML_buffer);
 }
 void GroundWaterMonitor::runManualMeasure() {
-	float value = measure();
+	measure();
 	// 
 	page_index();
 }
 // Functions find in HTML form <input> element with selected "name" and complete value attribute
 String GroundWaterMonitor::completeHTMLValue(const char* html, String input_name, char* value) {
 	String s = html;
-	unsigned int position = s.indexOf(input_name, 0);	// Find input in html code
+	unsigned int position = s.indexOf("'" + input_name + "'", 0);	// Find input in html code
 	position = s.indexOf("value=", position);		// Find value parameter
 
 	String replace = value;
-	String x = s.substring(position, position+10);		// Complete value
+	String x = s.substring(position, position+30);		// Complete value
 	x.replace("''", "'" + replace + "'");
 
-	s = s.substring(0, position) + x + s.substring(position + 8);
+	s = s.substring(0, position) + x + s.substring(position + 30);
 
 	return s;
 }
 String GroundWaterMonitor::completeHTMLValue(String html, String input_name, char* value) {
 	String s = html;
-	uint16_t position = s.indexOf(input_name, 0);	// Find input in html code
+	uint16_t position = s.indexOf("'" + input_name + "'", 0);	// Find input in html code
 	position = s.indexOf("value=", position);		// Find value parameter
 
 	String replace = value;
-	String x = s.substring(position, position + 10);		// Complete value
+	String x = s.substring(position, position + 30);		// Complete value
 	x.replace("''", "'" + replace + "'");
 
-	s = s.substring(0, position) + x + s.substring(position + 8);
+	s = s.substring(0, position) + x + s.substring(position + 30);
 
 	return s;
 }
 String GroundWaterMonitor::completeHTMLValue(String html, String input_name, String value) {
-	String s = html;
-	uint16_t position = s.indexOf(input_name, 0);	// Find input in html code
-	position = s.indexOf("value=", position);		// Find value parameter
+	String str = html;
+	uint16_t position = str.indexOf("'"+input_name+"'", 0);	// Find input in html code
+	position = str.indexOf("value=", position);		// Find value parameter
 
-	String x = s.substring(position, position + 10);		// Complete value
+	String x = str.substring(position, position + 30);		// Complete value
 	x.replace("''", "'" + value + "'");
+	str = str.substring(0, position) + x + str.substring(position + 30);
 
-	s = s.substring(0, position) + x + s.substring(position + 8);
-
-	return s;
+	return str;
 }
 String GroundWaterMonitor::completeHTMLValue(String html, String input_name, int value) {
-	String s = html;
-	uint16_t position = s.indexOf(input_name, 0);	// Find input in html code
-	position = s.indexOf("value=", position);		// Find value parameter
+	String str = html;
+	uint16_t position = str.indexOf("'" + input_name + "'", 0);	// Find input in html code
+	position = str.indexOf("value=", position);		// Find value parameter
 
 	String s_val = String(value);
-	String x = s.substring(position, position + 10);		// Complete value
+	String x = str.substring(position, position + 10);		// Complete value
 	x.replace("''", "'" + s_val + "'");
+	str = str.substring(0, position) + x + str.substring(position + 8);
 
-	s = s.substring(0, position) + x + s.substring(position + 8);
+	return str;
+}
+String GroundWaterMonitor::completeHTMLCheckbox(String html, String input_name, String value) {
+	String str = html;
+	uint16_t position = str.indexOf("value='"+value+"' name='"+input_name, 0);	// Find input in html code
+	String s_before = str.substring(0, position);
+	String s_after = str.substring(position, str.length());
 
-	return s;
+	str = s_before +" checked "+ s_after;
+
+	return str;
 }
 
 ///////////////////////////////////////////////

@@ -12,7 +12,7 @@ GroundWaterMonitor gwm;
 void setup() {
 	bool deviceOnline;
 	float data;
-	uint8_t countdown = 15;
+	uint8_t countdown = 3;
 
 
 	deviceOnline = gwm.initialize();
