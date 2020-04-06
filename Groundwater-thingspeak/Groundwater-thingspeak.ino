@@ -12,14 +12,14 @@ GroundWaterMonitor gwm;
 void setup() {
 	bool deviceOnline;
 	float data;
-	uint8_t countdown = 3;
+	uint8_t countdown = 5;
 
 
 	deviceOnline = gwm.initialize();
 	
 	if (deviceOnline) {
 		data = gwm.measure();
-		//gwm.sendDataToCloud(data);
+		gwm.sendDataToCloud(data);
 		/*
 			Device is powered only 15 second, during normal work. In this case is not
 			neccessary to turn on webserver (and mess WiFi band) - device only send data to cloud.
@@ -31,11 +31,11 @@ void setup() {
 			delay(1000);
 		}
 	}
-	gwm.enableWebserver();
+	gwm.enableWebserver(true);
 }
 
 
 void loop() {
-	gwm.webserverHandler();
+	gwm.idleTask();
 	delay(10);
 }

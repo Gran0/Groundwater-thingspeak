@@ -1,6 +1,7 @@
 #include "GroundWaterMonitor.h"
 #include "WString.h"
 #include "string.h"
+#include <cfloat>
 
 GroundWaterMonitor::GroundWaterMonitor() {
 	this->s = &Serial;
@@ -14,6 +15,7 @@ GroundWaterMonitor::~GroundWaterMonitor() {}
 */
 bool GroundWaterMonitor::initialize() {
 	bool internetAvailable = false;
+	this->timeOfLastMeas = 0;
 
 	// Pin inicialization
 
@@ -70,8 +72,9 @@ bool GroundWaterMonitor::initialize() {
 	return internetAvailable;
 }
 
-void GroundWaterMonitor::webserverHandler() {
+void GroundWaterMonitor::idleTask() {
 	server.handleClient();
+	periodicalMeasure();
 }
 void GroundWaterMonitor::sendDataToCloud(float value) {
 	String postStr = this->apiKey;
@@ -113,12 +116,65 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 }
 float GroundWaterMonitor::measure() {
 	/* Do measurement and calculate result 
+
+
 	*/
-	this->waterLevel = 123.4f;
-	return 123.45f;
+	this->waterLevel += 30.0f;
+
+
+	this->timeOfLastMeas = millis();
+	return this->waterLevel;
+}
+void GroundWaterMonitor::periodicalMeasure() {
+	if (!this->periodicalMode)
+		return;
+
+	uint32_t deltaTime;
+	bool internetAvailable;
+
+	if (this->timeOfLastMeas > millis()) {		// overflow condition
+		deltaTime = 4294967295 - this->timeOfLastMeas + millis();
+	}
+	else {
+		deltaTime = millis() - this->timeOfLastMeas;
+	}
+
+	if (deltaTime > this->period *60* 1000) {		// It's time to begin party.
+		measure();
+
+		wifi.disconnect();
+		wifi.mode(WIFI_MODE_STA);					// Work as end-device
+		wifi.begin(this->wifiName, this->wifiPasswd);
+		for (uint8_t i = 0; i < 30; i++)
+		{
+			if (wifi.status() == WL_CONNECTED) {	// Bingo
+				internetAvailable = true;
+				break;
+			}
+
+			if (i == 10) {	// Last chance ...
+				wifi.begin(this->wifiName, this->wifiPasswd);
+			}
+
+			if (i == 29) {	// See you later :(
+				s->println(" Connection timeout");
+				internetAvailable = false;
+				break;
+			}
+			s->print(".");
+			delay(500);
+		}
+
+		if (internetAvailable) {
+			sendDataToCloud(this->waterLevel);
+			delay(100);
+		}
+		enableWebserver(false);
+
+	}
 }
 
-void GroundWaterMonitor::enableWebserver() {
+void GroundWaterMonitor::enableWebserver(bool info) {
 	wifi.disconnect();
 
 	wifi.mode(WIFI_MODE_AP);	// Work as router
@@ -126,14 +182,15 @@ void GroundWaterMonitor::enableWebserver() {
 	wifi.softAPConfig(ip, gateway, mask);
 	wifi.setHostname("Groundwater monitor");	// Name for this access point
 	wifi.softAP(this->wifiAPname, this->wifiAPpasswd, this->wifiAPchannel,150,2);
-
-	s->println("\n\nStarting access point ...");
-	s->print("AP name: ");
-	s->println(this->wifiAPname);
-	s->print("Password: ");
-	s->println(this->wifiAPpasswd);
-	s->println("More on configuration page: http://configuration/ \n\n");
-
+	if (info) {
+		s->println("\n\nStarting access point ...");
+		s->print("AP name: ");
+		s->println(this->wifiAPname);
+		s->print("Password: ");
+		s->println(this->wifiAPpasswd);
+		s->println("More on configuration page: http://configuration/ \n\n");
+	}
+	
 	// Webserver for device configuration
 	this->server.on("/", [&]() {
 		page_index();
@@ -266,7 +323,7 @@ void GroundWaterMonitor::page_index() {
 	html = completeHTMLValue(html, "hotspot_ssid", this->wifiAPname);
 	html = completeHTMLValue(html, "hotspot_passwd", this->wifiAPpasswd);
 	
-	html = completeHTMLValue(html, "hotspot_channel", this->wifiAPchannel);
+	html = completeHTMLValue(html, "hotspot_channel",(int) this->wifiAPchannel);
 	html = completeHTMLValue(html, "api_key", this->apiKey);
 	html = completeHTMLValue(html, "height", this->sensorHeight);
 
@@ -279,6 +336,11 @@ void GroundWaterMonitor::page_index() {
 	html = completeHTMLValue(html, "period", timestamp);
 	html = completeHTMLCheckbox(html, "periodical", this->periodicalMode?"on":"off");
 
+	// Water level value
+	char depth[10];
+	sprintf(depth, "%.1f cm", this->waterLevel);
+	html.replace("xxx cm", String(depth));
+	
 	sprintf(this->HTML_buffer, "%s%s%s", this->htmlPrefix, html.c_str(), this->htmlPostfix);
 	server.send(200, "text/html", this->HTML_buffer);
 }
@@ -333,7 +395,7 @@ String GroundWaterMonitor::completeHTMLValue(String html, String input_name, Str
 }
 String GroundWaterMonitor::completeHTMLValue(String html, String input_name, int value) {
 	String str = html;
-	uint16_t position = str.indexOf("'" + input_name + "'", 0);	// Find input in html code
+	int16_t position = str.indexOf("'" + input_name + "'", 0);	// Find input in html code
 	position = str.indexOf("value=", position);		// Find value parameter
 
 	String s_val = String(value);
@@ -353,5 +415,3 @@ String GroundWaterMonitor::completeHTMLCheckbox(String html, String input_name, 
 
 	return str;
 }
-
-///////////////////////////////////////////////
