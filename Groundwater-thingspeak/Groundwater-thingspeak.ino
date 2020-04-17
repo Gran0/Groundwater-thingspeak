@@ -16,7 +16,7 @@ void setup() {
 
 
 	deviceOnline = gwm.initialize();
-	
+
 	if (deviceOnline) {
 		data = gwm.measure();
 		gwm.sendDataToCloud(data);

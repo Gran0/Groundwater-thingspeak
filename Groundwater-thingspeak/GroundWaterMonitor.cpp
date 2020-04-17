@@ -2,6 +2,8 @@
 #include "WString.h"
 #include "string.h"
 #include <cfloat>
+#include "esp_timer.h"
+
 
 GroundWaterMonitor::GroundWaterMonitor() {
 	this->s = &Serial;
@@ -18,6 +20,10 @@ bool GroundWaterMonitor::initialize() {
 	this->timeOfLastMeas = 0;
 
 	// Pin inicialization
+	pinMode(TRIGGER, OUTPUT);
+	pinMode(ECHO, INPUT);
+	digitalWrite(TRIGGER, HIGH);
+	pinMode(LED, OUTPUT);
 
 	// EEPROM connect
 	memory.begin(200);
@@ -115,14 +121,27 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 	this->client.stop();	
 }
 float GroundWaterMonitor::measure() {
-	/* Do measurement and calculate result 
+	digitalWrite(LED, HIGH);
 
+	digitalWrite(TRIGGER, LOW);
+	delayMicroseconds(20);
+	digitalWrite(TRIGGER, HIGH);
+	
+	this->echoDelay = 0;
+	delayMicroseconds(50);
 
-	*/
-	this->waterLevel += 30.0f;
-
+	while (!digitalRead(ECHO));
+	
+	while (digitalRead(ECHO)) {
+		this->echoDelay++;
+		delayMicroseconds(1);
+	}
+	
+	this->waterLevel = 337 * this->echoDelay / 10000.0f;
 
 	this->timeOfLastMeas = millis();
+	delay(100);
+	digitalWrite(LED, LOW);
 	return this->waterLevel;
 }
 void GroundWaterMonitor::periodicalMeasure() {
@@ -338,7 +357,7 @@ void GroundWaterMonitor::page_index() {
 
 	// Water level value
 	char depth[10];
-	sprintf(depth, "%.1f cm", this->waterLevel);
+	sprintf(depth, "%.2f cm", this->waterLevel);
 	html.replace("xxx cm", String(depth));
 	
 	sprintf(this->HTML_buffer, "%s%s%s", this->htmlPrefix, html.c_str(), this->htmlPostfix);
