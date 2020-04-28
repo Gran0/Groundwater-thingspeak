@@ -121,6 +121,7 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 	this->client.stop();	
 }
 float GroundWaterMonitor::measure() {
+	/*
 	digitalWrite(LED, HIGH);
 
 	digitalWrite(TRIGGER, LOW);
@@ -141,7 +142,8 @@ float GroundWaterMonitor::measure() {
 
 	this->timeOfLastMeas = millis();
 	delay(100);
-	digitalWrite(LED, LOW);
+	digitalWrite(LED, LOW);*/
+	this->waterLevel = 77.7;
 	return this->waterLevel;
 }
 void GroundWaterMonitor::periodicalMeasure() {
