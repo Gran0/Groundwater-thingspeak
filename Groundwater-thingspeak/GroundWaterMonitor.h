@@ -15,9 +15,10 @@
 #include "MemoryAdd.h"
 
 // Pinout
-#define TRIGGER 32
-#define ECHO 33
-#define LED 2
+#define TRIGGER 33
+#define ECHO 17
+#define LED 19
+#define RESET 5
 
 class GroundWaterMonitor
 {

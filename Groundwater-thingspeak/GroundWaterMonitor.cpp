@@ -23,7 +23,15 @@ bool GroundWaterMonitor::initialize() {
 	pinMode(TRIGGER, OUTPUT);
 	pinMode(ECHO, INPUT);
 	digitalWrite(TRIGGER, HIGH);
+
+	pinMode(RESET, INPUT);
+	digitalWrite(RESET, HIGH);
+	pinMode(18, OUTPUT);
+	digitalWrite(18, HIGH);
+
+
 	pinMode(LED, OUTPUT);
+
 
 	// EEPROM connect
 	memory.begin(200);
@@ -81,6 +89,23 @@ bool GroundWaterMonitor::initialize() {
 void GroundWaterMonitor::idleTask() {
 	server.handleClient();
 	periodicalMeasure();
+
+	if (digitalRead(RESET) == 0) {
+		delay(3000);
+
+		if (digitalRead(RESET) == 0) {
+			for (uint8_t i = 0; i < 5; i++)
+			{
+				digitalWrite(LED, HIGH);
+				delay(200);
+				digitalWrite(LED, LOW);
+				delay(200);
+			}
+			resetEEPROMdata();
+			loadEEPROMconfig();
+			s->println("Settinge reloaded to default configuration.");
+		}
+	}
 }
 void GroundWaterMonitor::sendDataToCloud(float value) {
 	String postStr = this->apiKey;
@@ -121,7 +146,7 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 	this->client.stop();	
 }
 float GroundWaterMonitor::measure() {
-	/*
+	
 	digitalWrite(LED, HIGH);
 
 	digitalWrite(TRIGGER, LOW);
@@ -142,8 +167,8 @@ float GroundWaterMonitor::measure() {
 
 	this->timeOfLastMeas = millis();
 	delay(100);
-	digitalWrite(LED, LOW);*/
-	this->waterLevel = 77.7;
+	digitalWrite(LED, LOW);
+	//this->waterLevel = 77.7;
 	return this->waterLevel;
 }
 void GroundWaterMonitor::periodicalMeasure() {
@@ -372,8 +397,8 @@ void GroundWaterMonitor::page_notFound() {
 	server.send(404, "text/html", this->HTML_buffer);
 }
 void GroundWaterMonitor::runManualMeasure() {
+	s->println("Manual measuring");
 	measure();
-	// 
 	page_index();
 }
 // Functions find in HTML form <input> element with selected "name" and complete value attribute
