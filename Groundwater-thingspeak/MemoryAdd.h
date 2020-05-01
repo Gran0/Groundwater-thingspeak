@@ -15,6 +15,7 @@ public:
 	static const int ApiKey      = 156; // 20b
 	static const int PeriodicalMode = 177; // 1b
 	static const int Period		 = 178;  // 2b
+	static const int FieldID     = 180;
 private:
 };
 

@@ -57,10 +57,15 @@ bool GroundWaterMonitor::initialize() {
 			break;
 		}
 
-		if (i == 10) {	// Last chance ...
+		if (i == 1) {	// Try again
 			wifi.begin(this->wifiName, this->wifiPasswd);
 		}
-		
+		if (i == 3) {	
+			wifi.begin(this->wifiName, this->wifiPasswd);
+		}
+		if (i == 20) {	
+			wifi.begin(this->wifiName, this->wifiPasswd);
+		}
 		if (i == 29) {	// See you later :(
 			s->println(" Connection timeout");
 			internetAvailable = false;
@@ -91,15 +96,15 @@ void GroundWaterMonitor::idleTask() {
 	periodicalMeasure();
 
 	if (digitalRead(RESET) == 0) {
-		delay(3000);
+		delay(2000);
 
 		if (digitalRead(RESET) == 0) {
-			for (uint8_t i = 0; i < 5; i++)
+			for (uint8_t i = 0; i < 7; i++)
 			{
 				digitalWrite(LED, HIGH);
-				delay(200);
+				delay(100);
 				digitalWrite(LED, LOW);
-				delay(200);
+				delay(100);
 			}
 			resetEEPROMdata();
 			loadEEPROMconfig();
@@ -111,7 +116,9 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 	String postStr = this->apiKey;
 	
 	if (this->client.connect(this->thingspeakWWW,80)) {
-		postStr += "&field1=";
+		postStr += "&field";
+		postStr += String(this->fieldID);
+		postStr += "=";
 		postStr += String(value);
 		/*
 		postStr += "&field2=";
@@ -146,29 +153,71 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 	this->client.stop();	
 }
 float GroundWaterMonitor::measure() {
-	
-	digitalWrite(LED, HIGH);
+	uint32_t counter = 0;
+	bool hwError = false;
+	float values[4];
 
-	digitalWrite(TRIGGER, LOW);
-	delayMicroseconds(20);
-	digitalWrite(TRIGGER, HIGH);
-	
-	this->echoDelay = 0;
-	delayMicroseconds(50);
+	// Repeat measure
+	for (uint8_t meas_num = 0; meas_num < 4; meas_num++)
+	{	
+		// Start pulse
+		digitalWrite(TRIGGER, LOW);
+		delayMicroseconds(20);
+		digitalWrite(TRIGGER, HIGH);
 
-	while (!digitalRead(ECHO));
-	
-	while (digitalRead(ECHO)) {
-		this->echoDelay++;
-		delayMicroseconds(1);
+		this->echoDelay = 0;
+		delayMicroseconds(50);
+		while (!digitalRead(ECHO)) {
+			counter++;
+			if (counter > 1000000) {
+				hwError = true;
+				break;
+			}
+
+		};
+		if (hwError == false) {
+			while (digitalRead(ECHO)) {
+				this->echoDelay++;
+				delayMicroseconds(1);
+			}
+
+			values[meas_num] = 337 * this->echoDelay / 10000.0f;	// Distance in cm
+		}
+		else {
+			this->waterLevel = HW_ERROR_CODE;
+			break;
+		}
+		delay(200);	//Delay between measurement
+	}
+
+	if (hwError) {
+		this->timeOfLastMeas = millis();
+		return HW_ERROR_CODE;
 	}
 	
-	this->waterLevel = 337 * this->echoDelay / 10000.0f;
+	// Data processing
+	float min = 20000;
+	float max = 0;
+	float avg = 0;
+	uint8_t ok_value = 0;
+	for (uint8_t i = 0; i < 4; i++)
+	{
+		if (values[i] > max)
+			max = values[i];
+		if (values[i] < min)
+			min = values[i];
+		avg += values[i];
+	}
+	avg /= 4.0;
+
+	if (max - min > 10.0) {
+		this->waterLevel = ECHO_ERROR_CODE;
+	}
+	else {
+		this->waterLevel = this->sensorHeight - avg;
+	}
 
 	this->timeOfLastMeas = millis();
-	delay(100);
-	digitalWrite(LED, LOW);
-	//this->waterLevel = 77.7;
 	return this->waterLevel;
 }
 void GroundWaterMonitor::periodicalMeasure() {
@@ -186,23 +235,29 @@ void GroundWaterMonitor::periodicalMeasure() {
 	}
 
 	if (deltaTime > this->period *60* 1000) {		// It's time to begin party.
+		digitalWrite(LED, HIGH);
 		measure();
 
 		wifi.disconnect();
 		wifi.mode(WIFI_MODE_STA);					// Work as end-device
 		wifi.begin(this->wifiName, this->wifiPasswd);
-		for (uint8_t i = 0; i < 30; i++)
+		for (uint8_t i = 0; i < 20; i++)
 		{
 			if (wifi.status() == WL_CONNECTED) {	// Bingo
 				internetAvailable = true;
 				break;
 			}
 
-			if (i == 10) {	// Last chance ...
+			if (i == 1) {	// Try again
 				wifi.begin(this->wifiName, this->wifiPasswd);
 			}
-
-			if (i == 29) {	// See you later :(
+			if (i == 5) {	// Try again
+				wifi.begin(this->wifiName, this->wifiPasswd);
+			}
+			if (i == 15) {	// Try again
+				wifi.begin(this->wifiName, this->wifiPasswd);
+			}
+			if (i == 19) {	// See you later :(
 				s->println(" Connection timeout");
 				internetAvailable = false;
 				break;
@@ -216,7 +271,7 @@ void GroundWaterMonitor::periodicalMeasure() {
 			delay(100);
 		}
 		enableWebserver(false);
-
+		digitalWrite(LED, LOW);
 	}
 }
 
@@ -226,7 +281,7 @@ void GroundWaterMonitor::enableWebserver(bool info) {
 	wifi.mode(WIFI_MODE_AP);	// Work as router
 	IPAddress ip(192, 168, 100, 101), mask(255, 255, 255, 0), gateway(192, 168, 100, 100);
 	wifi.softAPConfig(ip, gateway, mask);
-	wifi.setHostname("Groundwater monitor");	// Name for this access point
+	wifi.setHostname(this->wifiAPname);	// Name for this access point
 	wifi.softAP(this->wifiAPname, this->wifiAPpasswd, this->wifiAPchannel,150,2);
 	if (info) {
 		s->println("\n\nStarting access point ...");
@@ -263,6 +318,7 @@ void GroundWaterMonitor::loadEEPROMconfig() {
 	}
 	// Copy data EEPROM => RAM
 	this->apiKey = memory.readString(Address.ApiKey);
+	this->fieldID = memory.readUShort(Address.FieldID);
 	
 	buff = memory.readString(Address.APname);
 	buff.toCharArray(this->wifiAPname, 30, 0);
@@ -292,6 +348,7 @@ void GroundWaterMonitor::resetEEPROMdata() {
 	memory.writeUChar(Address.APchannel, 5);
 
 	memory.writeBytes(Address.ApiKey, "xxxXXXxxx\0", 10);
+	memory.writeUShort(Address.FieldID, 1);
 	memory.writeShort(Address.SensorHeight, 10);
 	memory.writeBool(Address.PeriodicalMode, false);
 	memory.writeUShort(Address.Period, 30);		// 30 min
@@ -308,6 +365,7 @@ void GroundWaterMonitor::storeEEPROMconfig() {
 	memory.writeUChar(Address.APchannel, this->wifiAPchannel);
 
 	memory.writeString(Address.ApiKey, this->apiKey);
+	memory.writeUShort(Address.FieldID, this->fieldID);
 	memory.writeShort(Address.SensorHeight, this->sensorHeight);
 	memory.writeUShort(Address.Period, this->period);
 	memory.writeBool(Address.PeriodicalMode, this->periodicalMode);
@@ -337,6 +395,11 @@ void GroundWaterMonitor::page_index() {
 	}
 	if (server.hasArg("api_key")) {
 		this->apiKey = server.arg("api_key");
+	}
+	if (server.hasArg("field_id")) {
+		long int ch = server.arg("field_id").toInt();
+		if (ch > 0 && ch < 9)
+			this->fieldID = (uint8_t)ch;
 	}
 	if (server.hasArg("height")) {
 		long int h = server.arg("height").toInt();
@@ -371,6 +434,7 @@ void GroundWaterMonitor::page_index() {
 	
 	html = completeHTMLValue(html, "hotspot_channel",(int) this->wifiAPchannel);
 	html = completeHTMLValue(html, "api_key", this->apiKey);
+	html = completeHTMLValue(html, "field_id",(int) this->fieldID);
 	html = completeHTMLValue(html, "height", this->sensorHeight);
 
 	int h = this->period / 60;
@@ -383,9 +447,19 @@ void GroundWaterMonitor::page_index() {
 	html = completeHTMLCheckbox(html, "periodical", this->periodicalMode?"on":"off");
 
 	// Water level value
-	char depth[10];
-	sprintf(depth, "%.2f cm", this->waterLevel);
-	html.replace("xxx cm", String(depth));
+	if (this->waterLevel == HW_ERROR_CODE) {
+		html.replace("xxx cm", "Hardware error!<br/>Check sensor cable and ultrasonic driver module.");
+		
+	}
+	else if (this->waterLevel == ECHO_ERROR_CODE) {
+		html.replace("xxx cm", "Bad echo - ??? cm");
+	}
+	else {
+		char depth[10];
+		sprintf(depth, "%.1f cm", this->waterLevel);
+		html.replace("xxx cm", String(depth));
+	}
+	
 	
 	sprintf(this->HTML_buffer, "%s%s%s", this->htmlPrefix, html.c_str(), this->htmlPostfix);
 	server.send(200, "text/html", this->HTML_buffer);
@@ -397,9 +471,12 @@ void GroundWaterMonitor::page_notFound() {
 	server.send(404, "text/html", this->HTML_buffer);
 }
 void GroundWaterMonitor::runManualMeasure() {
+	digitalWrite(LED, HIGH);
 	s->println("Manual measuring");
 	measure();
 	page_index();
+	delay(700);		// Longer LED blink
+	digitalWrite(LED, LOW);
 }
 // Functions find in HTML form <input> element with selected "name" and complete value attribute
 String GroundWaterMonitor::completeHTMLValue(const char* html, String input_name, char* value) {

@@ -118,7 +118,7 @@
         <div id="first">
             <h2>Device status</h2>
             <article>
-                <p>Last measured value: <span id="number">55123.99 cm</span> <a href="/manual_measure"><button>Start measuring</button></a></p>
+                <p>Last measured value: <span id="number">xxx cm</span> <a href="/manual_measure"><button>Start measuring</button></a></p>
             </article>
         </div>
         <form action="/" method="get">
@@ -126,15 +126,16 @@
                 <h2>Network</h2>
                 <article>
                     <h3>Internet connection over WiFi</h3>
-                    <label>WiFi name:</label><input type="text" name="lan_ssid" value="" maxlength="40"/><br />
-                    <label>Password:</label><input type="text" name="lan_passwd" value="" maxlength="40"/><br />
+                    <label>WiFi name:</label><input type="text" name="lan_ssid" value="" maxlength="40" /><br />
+                    <label>Password:</label><input type="text" name="lan_passwd" value="" maxlength="40" /><br />
 
                     <h3>Device PAN WiFi</h3>
-                    <label>WiFi hotspot name:</label><input type="text" name="hotspot_ssid" value="" maxlength="30"/><br />
-                    <label>Password:</label><input type="text" name="hotspot_passwd" value="" maxlength="40"/><br />
+                    <label>WiFi hotspot name:</label><input type="text" name="hotspot_ssid" value="" maxlength="30" /><br />
+                    <label>Password:</label><input type="text" name="hotspot_passwd" value="" maxlength="40" /><br />
                     <label>Channel:</label><input type="number" name="hotspot_channel" value="" min="1" step="1" max="11" />
-                    <h3>Thingspeak API</h3>
+                    <h3>Thingspeak channel settings</h3>
                     <label>Write API key:</label><input type="text" name="api_key" value="" /><br />
+                    <label>Field ID:</label><input type="number" name="field_id" value="" min="1" step="1" max="8" /><br />
                     <label></label>
                 </article>
             </div>
