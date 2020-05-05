@@ -155,10 +155,10 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 float GroundWaterMonitor::measure() {
 	uint32_t counter = 0;
 	bool hwError = false;
-	float values[4];
+	float values[8];
 
 	// Repeat measure
-	for (uint8_t meas_num = 0; meas_num < 4; meas_num++)
+	for (uint8_t meas_num = 0; meas_num <8; meas_num++)
 	{	
 		// Start pulse
 		digitalWrite(TRIGGER, LOW);
@@ -200,7 +200,7 @@ float GroundWaterMonitor::measure() {
 	float max = 0;
 	float avg = 0;
 	uint8_t ok_value = 0;
-	for (uint8_t i = 0; i < 4; i++)
+	for (uint8_t i = 0; i < 8; i++)
 	{
 		if (values[i] > max)
 			max = values[i];
@@ -208,9 +208,9 @@ float GroundWaterMonitor::measure() {
 			min = values[i];
 		avg += values[i];
 	}
-	avg /= 4.0;
+	avg /= 8.0;
 
-	if (max - min > 10.0) {
+	if (max - min > 50.0) {  
 		this->waterLevel = ECHO_ERROR_CODE;
 	}
 	else {
