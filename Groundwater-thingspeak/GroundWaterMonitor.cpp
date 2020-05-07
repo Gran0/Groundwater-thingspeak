@@ -155,10 +155,12 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 float GroundWaterMonitor::measure() {
 	uint32_t counter = 0;
 	bool hwError = false;
-	float values[8];
+
+	const uint8_t MEAS_COUNT = 8;
+	float values[MEAS_COUNT];
 
 	// Repeat measure
-	for (uint8_t meas_num = 0; meas_num <8; meas_num++)
+	for (uint8_t meas_num = 0; meas_num < MEAS_COUNT; meas_num++)
 	{	
 		// Start pulse
 		digitalWrite(TRIGGER, LOW);
@@ -199,8 +201,9 @@ float GroundWaterMonitor::measure() {
 	float min = 20000;
 	float max = 0;
 	float avg = 0;
-	uint8_t ok_value = 0;
-	for (uint8_t i = 0; i < 8; i++)
+
+	// Average
+	for (uint8_t i = 0; i < MEAS_COUNT; i++)
 	{
 		if (values[i] > max)
 			max = values[i];
@@ -208,13 +211,35 @@ float GroundWaterMonitor::measure() {
 			min = values[i];
 		avg += values[i];
 	}
-	avg /= 8.0;
+	avg /= MEAS_COUNT*1.0;
+
+	// Median
+	bool change;
+	float num,median;
+	while (1) {
+		change = false;
+		for (uint8_t i = 0; i < MEAS_COUNT-1; i++)	// Buble sort
+		{
+			if (values[i] > values[i + 1]) {
+				change = true;
+				num = values[i + 1];
+				values[i + 1] = values[i];
+				values[i] = num;
+			}
+
+		}
+
+		if (change == false)
+			break;
+	}
+	median = (values[MEAS_COUNT / 2] + values[(MEAS_COUNT / 2) + 1]) / 2.0;
 
 	if (max - min > 50.0) {  
 		this->waterLevel = ECHO_ERROR_CODE;
 	}
 	else {
-		this->waterLevel = this->sensorHeight - avg;
+		//this->waterLevel = this->sensorHeight - avg;	   // Average
+		this->waterLevel = this->sensorHeight - median;    // Median
 	}
 
 	this->timeOfLastMeas = millis();
