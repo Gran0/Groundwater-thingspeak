@@ -157,6 +157,7 @@ float GroundWaterMonitor::measure() {
 	bool hwError = false;
 
 	const uint8_t MEAS_COUNT = 8;
+	const float MEAS_TOLERANCE = 3.0;	// max. povolená odchylka mìøení, co je mimo se zahazuje
 	float values[MEAS_COUNT];
 
 	// Repeat measure
@@ -189,7 +190,7 @@ float GroundWaterMonitor::measure() {
 			this->waterLevel = HW_ERROR_CODE;
 			break;
 		}
-		delay(200);	//Delay between measurement
+		delay(50);	// 200ms Delay between measurement
 	}
 
 	if (hwError) {
@@ -202,17 +203,7 @@ float GroundWaterMonitor::measure() {
 	float max = 0;
 	float avg = 0;
 
-	// Average
-	for (uint8_t i = 0; i < MEAS_COUNT; i++)
-	{
-		if (values[i] > max)
-			max = values[i];
-		if (values[i] < min)
-			min = values[i];
-		avg += values[i];
-	}
-	avg /= MEAS_COUNT*1.0;
-
+	
 	// Median
 	bool change;
 	float num,median;
@@ -234,12 +225,43 @@ float GroundWaterMonitor::measure() {
 	}
 	median = (values[MEAS_COUNT / 2] + values[(MEAS_COUNT / 2) + 1]) / 2.0;
 
-	if (max - min > 50.0) {  
+	// Upper average, min, max
+	uint8_t OKvalueCount = 0;
+	for (uint8_t i = 0; i < MEAS_COUNT; i++)
+	{
+		if (values[i] > max)
+			max = values[i];
+		if (values[i] < min)
+			min = values[i];
+
+	}
+	// Count average from value which difference from max is lower then MEAS_TOLERANCE
+	for (uint8_t i = 0; i < MEAS_COUNT; i++)	
+	{
+		if (max - values[i] < MEAS_TOLERANCE) {
+			avg += values[i];
+			OKvalueCount++;
+		}
+	}
+	avg /= OKvalueCount;
+	
+	/*Serial.println("Mereni ");
+	for (uint8_t i = 0; i < MEAS_COUNT; i++)
+	{
+		Serial.print(values[i]);
+		Serial.print(" ");
+	}
+	Serial.println();
+	char text[40];
+	sprintf(text, "%.2f prumer %.2f median", avg, median);
+	Serial.println(text);  */
+
+	if (OKvalueCount < 3) {  
 		this->waterLevel = ECHO_ERROR_CODE;
 	}
 	else {
 		//this->waterLevel = this->sensorHeight - avg;	   // Average
-		this->waterLevel = this->sensorHeight - median;    // Median
+		this->waterLevel = this->sensorHeight - avg;    // Median
 	}
 
 	this->timeOfLastMeas = millis();
