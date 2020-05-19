@@ -38,7 +38,7 @@ bool GroundWaterMonitor::initialize() {
 	loadEEPROMconfig();
 
 	// Serial line for debugging
-	s->begin(9600);
+	s->begin(19200);
 	s->println("\n\n\n> Ground water monitor <");
 
 	
@@ -73,9 +73,9 @@ bool GroundWaterMonitor::initialize() {
 		}
 
 		s->print(".");
-		delay(500);
+		delay(100);
 	}
-
+	/*
 	if (internetAvailable) {
 		s->println(" Connected");
 		s->print("AP: ");
@@ -85,7 +85,7 @@ bool GroundWaterMonitor::initialize() {
 		s->println("dBm");
 		s->print("IP adress: ");
 		s->println(wifi.localIP());	
-	}
+	}*/
 
 
 	return internetAvailable;
@@ -176,7 +176,6 @@ float GroundWaterMonitor::measure() {
 				hwError = true;
 				break;
 			}
-
 		};
 		if (hwError == false) {
 			while (digitalRead(ECHO)) {
@@ -217,7 +216,6 @@ float GroundWaterMonitor::measure() {
 				values[i + 1] = values[i];
 				values[i] = num;
 			}
-
 		}
 
 		if (change == false)
@@ -233,7 +231,6 @@ float GroundWaterMonitor::measure() {
 			max = values[i];
 		if (values[i] < min)
 			min = values[i];
-
 	}
 	// Count average from value which difference from max is lower then MEAS_TOLERANCE
 	for (uint8_t i = 0; i < MEAS_COUNT; i++)	
@@ -245,23 +242,21 @@ float GroundWaterMonitor::measure() {
 	}
 	avg /= OKvalueCount;
 	
-	/*Serial.println("Mereni ");
+	
 	for (uint8_t i = 0; i < MEAS_COUNT; i++)
 	{
 		Serial.print(values[i]);
 		Serial.print(" ");
 	}
-	Serial.println();
 	char text[40];
 	sprintf(text, "%.2f prumer %.2f median", avg, median);
-	Serial.println(text);  */
+	Serial.println(text);  
 
 	if (OKvalueCount < 3) {  
 		this->waterLevel = ECHO_ERROR_CODE;
 	}
 	else {
-		//this->waterLevel = this->sensorHeight - avg;	   // Average
-		this->waterLevel = this->sensorHeight - avg;    // Median
+		this->waterLevel = this->sensorHeight - avg;    
 	}
 
 	this->timeOfLastMeas = millis();
@@ -519,10 +514,9 @@ void GroundWaterMonitor::page_notFound() {
 }
 void GroundWaterMonitor::runManualMeasure() {
 	digitalWrite(LED, HIGH);
-	s->println("Manual measuring");
 	measure();
 	page_index();
-	delay(700);		// Longer LED blink
+	delay(500);		// Longer LED blink
 	digitalWrite(LED, LOW);
 }
 // Functions find in HTML form <input> element with selected "name" and complete value attribute

@@ -18,10 +18,11 @@ void setup() {
 	deviceOnline = gwm.initialize();
 
 	if (deviceOnline) {
+		digitalWrite(LED, HIGH);
 		data = gwm.measure();
 		if(data != HW_ERROR_CODE && data != ECHO_ERROR_CODE)
 			gwm.sendDataToCloud(data);
-
+		digitalWrite(LED, LOW);
 		/*
 			Device is powered only 10 second, during normal work. In this case is not
 			neccessary to turn on webserver (and mess WiFi band) - device only send data to cloud.
