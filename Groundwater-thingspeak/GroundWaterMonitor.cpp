@@ -18,6 +18,7 @@ GroundWaterMonitor::~GroundWaterMonitor() {}
 bool GroundWaterMonitor::initialize() {
 	bool internetAvailable = false;
 	this->timeOfLastMeas = 0;
+	this->useOnlyLocalServer = false;
 
 	// Pin inicialization
 	pinMode(TRIGGER, OUTPUT);
@@ -75,7 +76,7 @@ bool GroundWaterMonitor::initialize() {
 		s->print(".");
 		delay(100);
 	}
-	/*
+	
 	if (internetAvailable) {
 		s->println(" Connected");
 		s->print("AP: ");
@@ -85,7 +86,7 @@ bool GroundWaterMonitor::initialize() {
 		s->println("dBm");
 		s->print("IP adress: ");
 		s->println(wifi.localIP());	
-	}*/
+	}
 
 
 	return internetAvailable;
@@ -151,6 +152,44 @@ void GroundWaterMonitor::sendDataToCloud(float value) {
 	}
 	this->client.flush();
 	this->client.stop();	
+}
+void GroundWaterMonitor::sendDataToLocal(float value){
+	String postStr;
+
+	if (this->client.connect(this->localServerIP,this->localServerPort)) {
+		postStr = "GET /upload?";
+
+		postStr += "water=";
+		postStr += String(value);
+
+		/*
+		postStr += "&field2=";
+		postStr += String(temp);
+		*/
+		postStr += " HTTP/1.1\r\n";
+		postStr += "Host: ";
+		postStr += this->localServerIP.toString() + "\r\n";
+		postStr += "Connection: close";		
+		postStr += "\r\n\r\n";
+		
+
+		this->client.print(postStr);
+		delay(800);
+
+		this->s->println("Data send to local server.");
+		this->s->print("Response:");
+		while (this->client.available()) {
+			String line = this->client.readStringUntil('\r');
+			if (line.indexOf("Status:") >= 0) {
+				this->s->print(line);
+			}
+		}
+	}
+	else {
+		this->s->println("Local server doesn't answer.");
+	}
+	this->client.flush();
+	this->client.stop();
 }
 float GroundWaterMonitor::measure() {
 	uint32_t counter = 0;
@@ -317,6 +356,7 @@ void GroundWaterMonitor::periodicalMeasure() {
 	}
 }
 
+
 void GroundWaterMonitor::enableWebserver(bool info) {
 	wifi.disconnect();
 
@@ -331,7 +371,7 @@ void GroundWaterMonitor::enableWebserver(bool info) {
 		s->println(this->wifiAPname);
 		s->print("Password: ");
 		s->println(this->wifiAPpasswd);
-		s->println("More on configuration page: http://configuration/ \n\n");
+		s->println("More on configuration page: http://configuration/ or http://192.168.100.101\n\n");
 	}
 	
 	// Webserver for device configuration
@@ -380,6 +420,9 @@ void GroundWaterMonitor::loadEEPROMconfig() {
 	this->periodicalMode = memory.readBool(Address.PeriodicalMode);
 	this->period = memory.readUShort(Address.Period);
 
+	this->useOnlyLocalServer = memory.readBool(Address.UseLocalServ);
+	this->localServerIP = IPAddress(memory.readULong(Address.LocalServerIp));
+	this->localServerPort = memory.readUShort(Address.LocalServerPort);
 }
 void GroundWaterMonitor::resetEEPROMdata() {
 	memory.writeBytes(Address.WiFiName, "Default name\0",13);
@@ -394,6 +437,10 @@ void GroundWaterMonitor::resetEEPROMdata() {
 	memory.writeShort(Address.SensorHeight, 10);
 	memory.writeBool(Address.PeriodicalMode, false);
 	memory.writeUShort(Address.Period, 30);		// 30 min
+
+	memory.writeUInt(Address.LocalServerIp, 0);
+	memory.writeBool(Address.UseLocalServ, false);
+	memory.writeUShort(Address.LocalServerPort, 80);
 
 	memory.writeByte(Address.INICIALIZED, 123);
 	memory.commit();
@@ -412,6 +459,10 @@ void GroundWaterMonitor::storeEEPROMconfig() {
 	memory.writeUShort(Address.Period, this->period);
 	memory.writeBool(Address.PeriodicalMode, this->periodicalMode);
 
+	memory.writeBool(Address.UseLocalServ, this->useOnlyLocalServer);
+	memory.writeUInt(Address.LocalServerIp,(uint32_t) this->localServerIP);
+	memory.writeUShort(Address.LocalServerPort, this->localServerPort);
+
 	memory.writeByte(Address.INICIALIZED, 123);
 	memory.commit();
 }
@@ -419,7 +470,7 @@ void GroundWaterMonitor::page_index() {
 
 	// Data from HTML form
 	if (server.hasArg("lan_ssid")) {
-		 strcpy(this->wifiName, server.arg("lan_ssid").c_str());
+		strcpy(this->wifiName, server.arg("lan_ssid").c_str());
 	}
 	if (server.hasArg("lan_passwd")) {
 		strcpy(this->wifiPasswd, server.arg("lan_passwd").c_str());
@@ -445,7 +496,7 @@ void GroundWaterMonitor::page_index() {
 	}
 	if (server.hasArg("height")) {
 		long int h = server.arg("height").toInt();
-		this->sensorHeight = (uint16_t) h;
+		this->sensorHeight = (uint16_t)h;
 	}
 	if (server.hasArg("periodical")) {
 		if (server.arg("periodical") == "on") {
@@ -457,15 +508,36 @@ void GroundWaterMonitor::page_index() {
 	if (server.hasArg("period")) {
 		String time = server.arg("period");
 		String hour = time.substring(0, time.indexOf(":"));
-		String min = time.substring(time.indexOf(":")+1, time.length());
+		String min = time.substring(time.indexOf(":") + 1, time.length());
 		if (hour.charAt(0) == '0')
 			hour = hour.substring(1, hour.length());
 		if (min.charAt(0) == '0')
 			min = min.substring(1, min.length());
 
-		this->period =(uint16_t)( hour.toInt()*60 + min.toInt());
+		this->period = (uint16_t)(hour.toInt() * 60 + min.toInt());
 	}
-	if(server.args() != 0)
+	if (server.hasArg("activ")) {
+		if (server.arg("activ") == "thcloud") {
+			this->useOnlyLocalServer = false;
+		}
+		else {
+			this->useOnlyLocalServer = true;
+		}
+	}
+	
+	uint32_t newIP[4];
+	if (server.hasArg("ip1") && server.hasArg("ip2") && server.hasArg("ip3") && server.hasArg("ip4")) {
+		newIP[0] = server.arg("ip1").toInt();
+		newIP[1] = server.arg("ip2").toInt();
+		newIP[2] = server.arg("ip3").toInt();
+		newIP[3] = server.arg("ip4").toInt();
+		this->localServerIP = IPAddress((uint8_t)newIP[0], (uint8_t)newIP[1], (uint8_t)newIP[2], (uint8_t)newIP[3]);
+	}
+	if (server.hasArg("port")) {
+		this->localServerPort = (uint16_t) server.arg("port").toInt();
+	}
+
+	if (server.args() != 0)
 		storeEEPROMconfig();
 
 	// Formating HTML page with data
@@ -486,8 +558,17 @@ void GroundWaterMonitor::page_index() {
 	timestamp += m < 10 ? "0" + String(m) : String(m);
 	
 	html = completeHTMLValue(html, "period", timestamp);
-	html = completeHTMLCheckbox(html, "periodical", this->periodicalMode?"on":"off");
+	html = completeHTMLCheckbox(html, "periodical", this->periodicalMode? "on":"off");
+	html = completeHTMLCheckbox(html, "activ", this->useOnlyLocalServer? "local" : "thcloud");
+	
+	uint32_t ip = (uint32_t) this->localServerIP;
+	html = completeHTMLValue(html, "ip1", (ip & 0xff));
+	html = completeHTMLValue(html, "ip2", (ip & 0xff00) >> 8);
+	html = completeHTMLValue(html, "ip3", (ip & 0xff0000) >> 16);
+	html = completeHTMLValue(html, "ip4", ip >> 24);
 
+	html = completeHTMLValue(html, "port", this->localServerPort);
+	
 	// Water level value
 	if (this->waterLevel == HW_ERROR_CODE) {
 		html.replace("xxx cm", "Hardware error!<br/>Check sensor cable and ultrasonic driver module.");
@@ -578,4 +659,8 @@ String GroundWaterMonitor::completeHTMLCheckbox(String html, String input_name, 
 	str = s_before +" checked "+ s_after;
 
 	return str;
+}
+
+bool GroundWaterMonitor::useTSserver() {
+	return !this->useOnlyLocalServer;
 }

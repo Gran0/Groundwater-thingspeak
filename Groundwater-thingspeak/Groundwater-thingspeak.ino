@@ -20,11 +20,18 @@ void setup() {
 	if (deviceOnline) {
 		digitalWrite(LED, HIGH);
 		data = gwm.measure();
-		if(data != HW_ERROR_CODE && data != ECHO_ERROR_CODE)
-			gwm.sendDataToCloud(data);
+		if (data != HW_ERROR_CODE && data != ECHO_ERROR_CODE) {
+			if (gwm.useTSserver()) {
+				gwm.sendDataToCloud(data);
+			}
+			else {
+				gwm.sendDataToLocal(data);
+			}
+		}
+			
 		digitalWrite(LED, LOW);
 		/*
-			Device is powered only 10 second, during normal work. In this case is not
+			Device is powered only 15 second, during normal work. In this case is not
 			neccessary to turn on webserver (and mess WiFi band) - device only send data to cloud.
 
 			In case of manual configuration, device is powered from USB port and after 
@@ -34,7 +41,7 @@ void setup() {
 			delay(1000);
 		}
 	}
-	gwm.enableWebserver(true);
+	gwm.enableWebserver(true); 
 }
 
 
